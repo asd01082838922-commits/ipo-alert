@@ -1,0 +1,52 @@
+name: IPO Alert
+
+on:
+  schedule:
+    # 매 30분마다 실행 (UTC). 스크립트가 KST 기준으로 발송 시점을 판단.
+    #  - 예비심사 청구/결과: 매 실행마다 체크
+    #  - 신규상장 전일 알림: KST 08~09시대 실행에서만 발송
+    - cron: "*/30 * * * *"
+  workflow_dispatch:   # 수동 실행(테스트용) 버튼
+
+# 상태 파일 커밋이 겹치지 않도록 직렬화
+concurrency:
+  group: ipo-alert
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Run IPO alert
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python ipo_alert.py both
+
+      - name: Commit state changes
+        run: |
+          git config user.name "ipo-alert-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add state/
+          if git diff --staged --quiet; then
+            echo "변경 없음"
+          else
+            git commit -m "chore: update state [skip ci]"
+            # 다른 실행이 먼저 push 했을 수 있으니 rebase 후 push
+            git pull --rebase --autostash origin ${{ github.ref_name }} || true
+            git push
+          fi
