@@ -494,6 +494,23 @@ def cmd_chatid():
         print("    먼저 저장소 Settings > Secrets 에 봇 토큰을 등록하세요.")
         print("=" * 50)
         return
+    # 0) 이 토큰이 어떤 봇 것인지 먼저 확인 (getMe)
+    try:
+        me = requests.get(f"https://api.telegram.org/bot{token}/getMe", timeout=20).json()
+    except Exception as e:
+        print(f"[!] 텔레그램 호출 실패: {e}")
+        print("=" * 50)
+        return
+    if not me.get("ok"):
+        print(f"[!] 토큰이 잘못되었습니다 (getMe 실패). 응답: {me}")
+        print("    BotFather > /mybots > 봇선택 > API Token 에서 다시 복사하세요.")
+        print("=" * 50)
+        return
+    bot_username = me["result"].get("username", "")
+    print(f"이 토큰의 봇: @{bot_username}")
+    print(f"  → 반드시 텔레그램에서 '@{bot_username}' 이 봇에게 메시지를 보내야 합니다!")
+    print("-" * 50)
+
     try:
         r = requests.get(f"https://api.telegram.org/bot{token}/getUpdates", timeout=20)
         data = r.json()
@@ -503,7 +520,7 @@ def cmd_chatid():
         return
 
     if not data.get("ok"):
-        print(f"[!] 토큰이 잘못된 것 같습니다. 텔레그램 응답: {data}")
+        print(f"[!] getUpdates 실패. 텔레그램 응답: {data}")
         print("=" * 50)
         return
 
@@ -520,9 +537,10 @@ def cmd_chatid():
             chats[chat["id"]] = label
 
     if not chats:
-        print("[!] 아직 메시지 기록이 없습니다.")
-        print("    → 텔레그램에서 '내가 만든 봇' 대화창을 열고 START(또는 아무 메시지)를")
-        print("      보낸 뒤, 이 워크플로를 다시 Run 하세요.")
+        print(f"[!] @{bot_username} 봇에게 온 메시지가 없습니다.")
+        print(f"    → 텔레그램 검색창에 '@{bot_username}' 을 정확히 입력해 그 봇을 열고,")
+        print("      START(또는 아무 메시지)를 보낸 뒤 이 워크플로를 다시 Run 하세요.")
+        print(f"    ※ 다른 봇 말고 반드시 @{bot_username} 에게 보내야 합니다.")
         print("=" * 50)
         return
 
