@@ -484,15 +484,71 @@ def fmt_listing(e, target: dt.date) -> str:
 
 
 # --------------------------------------------------------------------------
+# chat_id 자동 탐색
+# --------------------------------------------------------------------------
+def cmd_chatid():
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    print("=" * 50)
+    if not token:
+        print("[!] TELEGRAM_BOT_TOKEN secret 이 설정되지 않았습니다.")
+        print("    먼저 저장소 Settings > Secrets 에 봇 토큰을 등록하세요.")
+        print("=" * 50)
+        return
+    try:
+        r = requests.get(f"https://api.telegram.org/bot{token}/getUpdates", timeout=20)
+        data = r.json()
+    except Exception as e:
+        print(f"[!] 텔레그램 호출 실패: {e}")
+        print("=" * 50)
+        return
+
+    if not data.get("ok"):
+        print(f"[!] 토큰이 잘못된 것 같습니다. 텔레그램 응답: {data}")
+        print("=" * 50)
+        return
+
+    chats = {}
+    for upd in data.get("result", []):
+        msg = (upd.get("message") or upd.get("edited_message")
+               or upd.get("channel_post") or {})
+        chat = msg.get("chat")
+        if chat:
+            label = (chat.get("title")
+                     or " ".join(x for x in [chat.get("first_name"),
+                                             chat.get("last_name")] if x)
+                     or chat.get("username") or "")
+            chats[chat["id"]] = label
+
+    if not chats:
+        print("[!] 아직 메시지 기록이 없습니다.")
+        print("    → 텔레그램에서 '내가 만든 봇' 대화창을 열고 START(또는 아무 메시지)를")
+        print("      보낸 뒤, 이 워크플로를 다시 Run 하세요.")
+        print("=" * 50)
+        return
+
+    print("✅ chat_id 를 찾았습니다! 아래 숫자를 복사하세요:")
+    print("")
+    for cid, name in chats.items():
+        print(f"   ★  TELEGRAM_CHAT_ID = {cid}    ({name})")
+    print("")
+    print("이 숫자를 저장소 Settings > Secrets 에 TELEGRAM_CHAT_ID 로 등록하세요.")
+    print("=" * 50)
+
+
+# --------------------------------------------------------------------------
 # main
 # --------------------------------------------------------------------------
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("task", choices=["invstg", "listing", "both", "test"])
+    ap.add_argument("task", choices=["invstg", "listing", "both", "test", "chatid"])
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--force-listing", action="store_true",
                     help="시간대/영업일 체크 무시하고 상장 알림 실행")
     args = ap.parse_args()
+
+    if args.task == "chatid":
+        cmd_chatid()
+        return
 
     notifier = Notifier(dry_run=args.dry_run)
 

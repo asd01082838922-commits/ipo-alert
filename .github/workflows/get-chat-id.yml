@@ -1,0 +1,21 @@
+name: Get Chat ID
+
+# chat_id 를 자동으로 찾아주는 도우미. Actions 탭에서 수동 실행(Run workflow) 후
+# 로그에 출력되는 TELEGRAM_CHAT_ID 숫자를 복사해서 Secret 으로 등록하세요.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  chatid:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Find chat_id
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: python ipo_alert.py chatid
