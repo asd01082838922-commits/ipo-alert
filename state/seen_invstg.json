@@ -13094,5 +13094,21 @@
     "apply_date": "2026-07-10",
     "result_date": "",
     "status": "청구서 접수"
+  },
+  "20260127000307": {
+    "name": "넥스아이",
+    "market": "코스닥",
+    "type": "신규상장",
+    "apply_date": "2026-07-21",
+    "result_date": "",
+    "status": "청구서 접수"
+  },
+  "20260326000127": {
+    "name": "아델",
+    "market": "코스닥",
+    "type": "신규상장",
+    "apply_date": "2026-07-21",
+    "result_date": "",
+    "status": "청구서 접수"
   }
 }
