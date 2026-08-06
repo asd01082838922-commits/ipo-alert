@@ -252,7 +252,7 @@
     "market": "코스닥",
     "type": "신규상장",
     "apply_date": "2026-04-30",
-    "result_date": "",
+    "result_date": "2026-07-30",
     "status": "심사 승인"
   },
   "20251127000159": {
@@ -13188,6 +13188,14 @@
     "market": "유가증권",
     "type": "신규상장",
     "apply_date": "2026-08-04",
+    "result_date": "",
+    "status": "청구서 접수"
+  },
+  "20260330000002": {
+    "name": "동원파츠",
+    "market": "코스닥",
+    "type": "신규상장",
+    "apply_date": "2026-08-06",
     "result_date": "",
     "status": "청구서 접수"
   }
