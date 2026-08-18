@@ -41,12 +41,19 @@ try:
 except Exception:  # pragma: no cover
     _holidays = None
 
+try:
+    # 크롬 TLS 지문 위장 (KIND 상세페이지 봇차단 우회용)
+    from curl_cffi import requests as cffi_requests
+except Exception:  # pragma: no cover
+    cffi_requests = None
+
 # --------------------------------------------------------------------------
 # 설정
 # --------------------------------------------------------------------------
 BASE = "https://kind.krx.co.kr"
 INVSTG_URL = BASE + "/listinvstg/listinvstgcom.do"
 OFFERING_URL = BASE + "/listinvstg/pubofrprogcom.do"   # 공모기업 진행현황 (상장예정일 포함)
+OFFERING_DETAIL_URL = BASE + "/listinvstg/pubofrprogcomdetail.do?method=searchProgComDetailMain&bzProcsNo={}"
 DETAIL_URL = BASE + "/listinvstg/listinvstgcom.do?method=searchListInvstgCorpDetail&bizProcNo={}"
 
 STATE_DIR = Path(__file__).resolve().parent / "state"
@@ -419,14 +426,43 @@ def parse_offering_html(html: str):
                 listing_date = dt.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
             except ValueError:
                 listing_date = None
+        bm = re.search(r"fnDetailView\('(\d+)'\)", str(tr))
         out.append({
             "name": name,
             "market": market,
             "listing_date": listing_date,
             "offer_price": tds[5].get_text(strip=True),   # 확정공모가
             "underwriter": tds[8].get_text(strip=True),
+            "bizno": bm.group(1) if bm else "",
         })
     return out
+
+
+def _num(s: str) -> int:
+    """'28,400' -> 28400. 숫자 없으면 0."""
+    return int(re.sub(r"[^\d]", "", s or "") or 0)
+
+
+def fetch_total_shares(bizno: str):
+    """공모진행 상세(pubofrprogcomdetail)에서 상장주식수 추출.
+    이 페이지는 KIND 봇차단(TLS지문) 대상이라 curl_cffi(크롬 위장)로 접근."""
+    if not bizno or cffi_requests is None:
+        return None
+    url = OFFERING_DETAIL_URL.format(bizno)
+    for imp in ("chrome131", "chrome124", "chrome"):
+        try:
+            r = cffi_requests.get(url, impersonate=imp,
+                                  headers={"Referer": OFFERING_URL,
+                                           "Accept-Language": "ko-KR,ko;q=0.9"},
+                                  timeout=30)
+            html = r.text
+            if "상장주식수" in html:
+                m = re.search(r"상장주식수[\s\S]{0,300}?([\d,]{4,})", html)
+                if m:
+                    return _num(m.group(1))
+        except Exception as e:
+            print(f"[listing] 상세 조회 실패({imp}): {e}", file=sys.stderr)
+    return None
 
 
 def run_listing(session, notifier: Notifier, force=False):
@@ -460,6 +496,10 @@ def run_listing(session, notifier: Notifier, force=False):
         key = f"{target.isoformat()}|{e['name']}"
         if key in notified:
             continue
+        # 상장 시가총액 = 확정공모가 x 상장주식수 (억원)
+        shares = fetch_total_shares(e.get("bizno"))
+        price = _num(e.get("offer_price"))
+        e["mcap_eok"] = round(price * shares / 1e8) if (shares and price) else None
         notifier.send(fmt_listing(e, target))
         notified[key] = now.isoformat()
         sent += 1
@@ -477,11 +517,14 @@ def fmt_listing(e, target: dt.date) -> str:
     weekday_ko = "월화수목금토일"[target.weekday()]
     price = (e.get("offer_price") or "").strip()
     price_str = f"{price}원" if price else "-"
+    mcap = e.get("mcap_eok")
+    mcap_str = f"약 {mcap:,}억원" if mcap else "확인 필요"
     return (
         "🔔 <b>신규상장 예정 (내일)</b>\n"
         f"• 회사: <b>{e['name']}</b> ({e['market']})\n"
         f"• 상장예정일: {target.isoformat()} ({weekday_ko})\n"
         f"• 확정공모가: {price_str}\n"
+        f"• 상장 시가총액: {mcap_str}\n"
         f"• 주선인: {e['underwriter']}\n"
         "※ 상장 전 영업일 알림"
     )
@@ -562,7 +605,7 @@ def cmd_chatid():
 # --------------------------------------------------------------------------
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("task", choices=["invstg", "listing", "both", "test", "chatid"])
+    ap.add_argument("task", choices=["invstg", "listing", "both", "test", "chatid", "testmcap"])
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--force-listing", action="store_true",
                     help="시간대/영업일 체크 무시하고 상장 알림 실행")
@@ -570,6 +613,21 @@ def main():
 
     if args.task == "chatid":
         cmd_chatid()
+        return
+
+    if args.task == "testmcap":
+        # curl_cffi로 KIND 상세(상장주식수) 접근 가능한지 검증
+        print(f"curl_cffi 설치됨: {cffi_requests is not None}")
+        s = make_session()
+        rows = [r for r in fetch_offering_rows(s) if r.get("listing_date")]
+        print(f"공모진행 {len(rows)}건 수집, 상위 5건 상세 조회 테스트:")
+        for r in rows[:5]:
+            shares = fetch_total_shares(r.get("bizno"))
+            price = _num(r.get("offer_price"))
+            mcap = round(price * shares / 1e8) if (shares and price) else None
+            print(f"  - {r['name']}({r['market']}) 공모가={r.get('offer_price') or '-'} "
+                  f"상장주식수={shares if shares else '실패'} "
+                  f"시총={f'{mcap:,}억' if mcap else '-'} 상장일={r['listing_date']}")
         return
 
     notifier = Notifier(dry_run=args.dry_run)
