@@ -423,6 +423,7 @@ def parse_offering_html(html: str):
             "name": name,
             "market": market,
             "listing_date": listing_date,
+            "offer_price": tds[5].get_text(strip=True),   # 확정공모가
             "underwriter": tds[8].get_text(strip=True),
         })
     return out
@@ -474,10 +475,13 @@ def run_listing(session, notifier: Notifier, force=False):
 
 def fmt_listing(e, target: dt.date) -> str:
     weekday_ko = "월화수목금토일"[target.weekday()]
+    price = (e.get("offer_price") or "").strip()
+    price_str = f"{price}원" if price else "-"
     return (
         "🔔 <b>신규상장 예정 (내일)</b>\n"
         f"• 회사: <b>{e['name']}</b> ({e['market']})\n"
         f"• 상장예정일: {target.isoformat()} ({weekday_ko})\n"
+        f"• 확정공모가: {price_str}\n"
         f"• 주선인: {e['underwriter']}\n"
         "※ 상장 전 영업일 알림"
     )
