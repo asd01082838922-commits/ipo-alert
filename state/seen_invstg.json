@@ -13214,5 +13214,13 @@
     "apply_date": "2026-08-18",
     "result_date": "",
     "status": "청구서 접수"
+  },
+  "20260820000587": {
+    "name": "카카오",
+    "market": "유가증권",
+    "type": "재상장",
+    "apply_date": "2026-08-21",
+    "result_date": "",
+    "status": "청구서 접수"
   }
 }
