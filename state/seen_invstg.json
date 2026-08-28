@@ -165,15 +165,15 @@
     "type": "신규상장",
     "apply_date": "2026-05-29",
     "result_date": "",
-    "status": "청구서 접수"
+    "status": "심사 승인"
   },
   "20260130000233": {
     "name": "다비오",
     "market": "코스닥",
     "type": "신규상장",
     "apply_date": "2026-05-28",
-    "result_date": "",
-    "status": "청구서 접수"
+    "result_date": "2026-08-28",
+    "status": "심사 승인"
   },
   "20260120000349": {
     "name": "삼홍아크튜리온",
