@@ -599,7 +599,7 @@ def fetch_dart_filings(key: str, days: int = 7):
 
 def fmt_dart(f: dict) -> str:
     link = DART_VIEW_URL.format(f.get("rcept_no", ""))
-    market = {"Y": "유가증권", "K": "코스닥", "N": "코넥스", "E": "기타"}.get(f.get("corp_cls", ""), "")
+    market = {"Y": "유가증권", "K": "코스닥", "N": "코넥스"}.get(f.get("corp_cls", ""), "")
     rdt = f.get("rcept_dt", "")
     rdt_fmt = f"{rdt[:4]}-{rdt[4:6]}-{rdt[6:]}" if len(rdt) == 8 else rdt
     mk = f" ({market})" if market else ""
