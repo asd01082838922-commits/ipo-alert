@@ -59,6 +59,11 @@ DETAIL_URL = BASE + "/listinvstg/listinvstgcom.do?method=searchListInvstgCorpDet
 STATE_DIR = Path(__file__).resolve().parent / "state"
 SEEN_INVSTG = STATE_DIR / "seen_invstg.json"
 NOTIFIED_LISTING = STATE_DIR / "notified_listing.json"
+NOTIFIED_DART = STATE_DIR / "notified_dart.json"
+
+# DART 전자공시 (증권신고서 감시)
+DART_LIST_URL = "https://opendart.fss.or.kr/api/list.json"
+DART_VIEW_URL = "https://dart.fss.or.kr/dsaf001/main.do?rcpNo={}"
 
 KST = dt.timezone(dt.timedelta(hours=9))
 
@@ -531,6 +536,132 @@ def fmt_listing(e, target: dt.date) -> str:
 
 
 # --------------------------------------------------------------------------
+# Task 3 : DART 증권신고서 (심사승인 기업 대상, 상장 후 제외, 정정 포함)
+# --------------------------------------------------------------------------
+def _norm_name(s: str) -> str:
+    s = s or ""
+    for x in ("주식회사", "(주)", "㈜", " ", "\t"):
+        s = s.replace(x, "")
+    return s.strip()
+
+
+def approved_names(state: dict) -> set:
+    """심사승인 기업명 집합 (미승인/철회 제외)."""
+    out = set()
+    for v in state.values():
+        st = v.get("status", "") or ""
+        if "승인" in st and "미승인" not in st:
+            out.add(_norm_name(v.get("name", "")))
+    out.discard("")
+    return out
+
+
+def listed_names(offering_rows, today: dt.date) -> set:
+    """상장예정일이 이미 지난(=상장한) 기업명 집합 → DART 알림에서 제외."""
+    out = set()
+    for r in offering_rows:
+        d = r.get("listing_date")
+        if d and d < today:
+            out.add(_norm_name(r.get("name", "")))
+    out.discard("")
+    return out
+
+
+def fetch_dart_filings(key: str, days: int = 7):
+    """최근 발행공시(pblntf_ty=C) 목록 조회 (페이지네이션)."""
+    today = now_kst().date()
+    bgn = (today - dt.timedelta(days=days)).strftime("%Y%m%d")
+    end = today.strftime("%Y%m%d")
+    out = []
+    page = 1
+    while page <= 5:
+        params = {"crtfc_key": key, "bgn_de": bgn, "end_de": end,
+                  "pblntf_ty": "C", "page_no": str(page), "page_count": "100"}
+        try:
+            r = requests.get(DART_LIST_URL, params=params, timeout=20)
+            data = r.json()
+        except Exception as e:
+            print(f"[dart] 조회 실패: {e}", file=sys.stderr)
+            break
+        status = data.get("status")
+        if status != "000":
+            # 013=데이터없음. 그 외는 키/파라미터 오류 등
+            if status != "013":
+                print(f"[dart] 응답 {status}: {data.get('message')}", file=sys.stderr)
+            break
+        out.extend(data.get("list", []))
+        if page >= int(data.get("total_page", 1)):
+            break
+        page += 1
+        time.sleep(0.3)
+    return out
+
+
+def fmt_dart(f: dict) -> str:
+    link = DART_VIEW_URL.format(f.get("rcept_no", ""))
+    market = {"Y": "유가증권", "K": "코스닥", "N": "코넥스", "E": "기타"}.get(f.get("corp_cls", ""), "")
+    rdt = f.get("rcept_dt", "")
+    rdt_fmt = f"{rdt[:4]}-{rdt[4:6]}-{rdt[6:]}" if len(rdt) == 8 else rdt
+    mk = f" ({market})" if market else ""
+    return (
+        "📄 <b>증권신고서 제출 (DART)</b>\n"
+        f"• 회사: <b>{f.get('corp_name', '')}</b>{mk}\n"
+        f"• 문서: {f.get('report_nm', '')}\n"
+        f"• 제출일: {rdt_fmt}\n"
+        f'<a href="{link}">📎 증권신고서 원문 보기</a>'
+    )
+
+
+def run_dart(session, notifier: Notifier):
+    key = os.environ.get("DART_API_KEY", "").strip()
+    if not key:
+        print("[dart] DART_API_KEY 미설정 → 건너뜀", file=sys.stderr)
+        return
+
+    approved = approved_names(load_json(SEEN_INVSTG, {}))
+    if not approved:
+        print("[dart] 심사승인 기업 없음 → 건너뜀")
+        return
+
+    today = now_kst().date()
+    try:
+        offering = fetch_offering_rows(session)
+    except Exception:
+        offering = []
+    listed = listed_names(offering, today)
+
+    filings = fetch_dart_filings(key)
+    notified = load_json(NOTIFIED_DART, {})
+    bootstrap = len(notified) == 0
+
+    new = []
+    for f in filings:
+        if "증권신고서" not in (f.get("report_nm", "") or ""):
+            continue
+        nm = _norm_name(f.get("corp_name", ""))
+        if nm not in approved or nm in listed:
+            continue
+        rno = f.get("rcept_no")
+        if not rno or rno in notified:
+            continue
+        notified[rno] = now_kst().isoformat()
+        new.append(f)
+
+    # 오래된 기록 정리(180일)
+    cutoff = (today - dt.timedelta(days=180)).strftime("%Y%m%d")
+    notified = {k: v for k, v in notified.items() if k[:8] >= cutoff}
+    save_json(NOTIFIED_DART, notified)
+
+    if bootstrap:
+        print(f"[dart] bootstrap: {len(new)}건 기준선 등록, 개별 알림 생략")
+        return
+
+    for f in new:
+        notifier.send(fmt_dart(f))
+    print(f"[dart] 신규 증권신고서 {len(new)}건 알림 (승인 {len(approved)}곳, 상장제외 {len(listed)}곳)")
+
+
+# --------------------------------------------------------------------------
 # chat_id 자동 탐색
 # --------------------------------------------------------------------------
 def cmd_chatid():
@@ -605,7 +736,8 @@ def cmd_chatid():
 # --------------------------------------------------------------------------
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("task", choices=["invstg", "listing", "both", "test", "chatid", "testmcap"])
+    ap.add_argument("task", choices=["invstg", "listing", "dart", "both",
+                                     "test", "chatid", "testmcap", "testdart"])
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--force-listing", action="store_true",
                     help="시간대/영업일 체크 무시하고 상장 알림 실행")
@@ -630,6 +762,29 @@ def main():
                   f"시총={f'{mcap:,}억' if mcap else '-'} 상장일={r['listing_date']}")
         return
 
+    if args.task == "testdart":
+        key = os.environ.get("DART_API_KEY", "").strip()
+        print(f"DART_API_KEY 설정됨: {bool(key)}")
+        s = make_session()
+        approved = approved_names(load_json(SEEN_INVSTG, {}))
+        print(f"심사승인 기업: {len(approved)}곳")
+        today = now_kst().date()
+        listed = listed_names(fetch_offering_rows(s), today)
+        print(f"이미 상장(제외): {len(listed)}곳")
+        filings = fetch_dart_filings(key)
+        print(f"최근 발행공시(7일): {len(filings)}건 조회")
+        cnt = 0
+        for f in filings:
+            if "증권신고서" not in (f.get("report_nm", "") or ""):
+                continue
+            nm = _norm_name(f.get("corp_name", ""))
+            if nm in approved and nm not in listed:
+                cnt += 1
+                print(f"  ★ {f.get('corp_name')} | {f.get('report_nm')} | "
+                      f"{f.get('rcept_dt')} | {DART_VIEW_URL.format(f.get('rcept_no'))}")
+        print(f"→ 알림 대상(승인·미상장) {cnt}건")
+        return
+
     notifier = Notifier(dry_run=args.dry_run)
 
     if args.task == "test":
@@ -651,6 +806,13 @@ def main():
             run_listing(session, notifier, force=args.force_listing)
         except Exception as e:
             print(f"[listing] 오류: {e}", file=sys.stderr)
+            raise
+
+    if args.task in ("dart", "both"):
+        try:
+            run_dart(session, notifier)
+        except Exception as e:
+            print(f"[dart] 오류: {e}", file=sys.stderr)
             raise
 
 

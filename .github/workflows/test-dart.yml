@@ -1,0 +1,19 @@
+name: Test DART
+
+# DART 증권신고서 감시가 되는지 검증하는 임시 워크플로 (수동 실행).
+on:
+  workflow_dispatch:
+
+jobs:
+  testdart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Test DART fetch
+        env:
+          DART_API_KEY: ${{ secrets.DART_API_KEY }}
+        run: python ipo_alert.py testdart
