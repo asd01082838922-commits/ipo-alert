@@ -612,6 +612,25 @@ def fmt_dart(f: dict) -> str:
     )
 
 
+def is_ipo_regstmt(f: dict, approved: set, listed: set) -> bool:
+    """IPO(신규상장) 증권신고서인가? 유상증자·채무증권·상장사 필터링.
+    - 지분증권 증권신고서만 (채무증권 제외)
+    - 심사승인 기업만
+    - 종목코드 있으면 상장사 → 제외 (유상증자)
+    - 공모진행상 이미 상장예정일 지난 곳 → 제외"""
+    rn = f.get("report_nm", "") or ""
+    if "증권신고서" not in rn or "지분증권" not in rn:
+        return False
+    nm = _norm_name(f.get("corp_name", ""))
+    if nm not in approved:
+        return False
+    if (f.get("stock_code") or "").strip():   # 상장사(종목코드 보유) → 제외
+        return False
+    if nm in listed:
+        return False
+    return True
+
+
 def run_dart(session, notifier: Notifier):
     key = os.environ.get("DART_API_KEY", "").strip()
     if not key:
@@ -636,10 +655,7 @@ def run_dart(session, notifier: Notifier):
 
     new = []
     for f in filings:
-        if "증권신고서" not in (f.get("report_nm", "") or ""):
-            continue
-        nm = _norm_name(f.get("corp_name", ""))
-        if nm not in approved or nm in listed:
+        if not is_ipo_regstmt(f, approved, listed):
             continue
         rno = f.get("rcept_no")
         if not rno or rno in notified:
@@ -773,16 +789,19 @@ def main():
         print(f"이미 상장(제외): {len(listed)}곳")
         filings = fetch_dart_filings(key)
         print(f"최근 발행공시(7일): {len(filings)}건 조회")
-        cnt = 0
+        print("--- 승인기업의 증권신고서(진단: stock_code 표시) ---")
         for f in filings:
-            if "증권신고서" not in (f.get("report_nm", "") or ""):
+            rn = f.get("report_nm", "") or ""
+            if "증권신고서" not in rn:
                 continue
             nm = _norm_name(f.get("corp_name", ""))
-            if nm in approved and nm not in listed:
-                cnt += 1
-                print(f"  ★ {f.get('corp_name')} | {f.get('report_nm')} | "
-                      f"{f.get('rcept_dt')} | {DART_VIEW_URL.format(f.get('rcept_no'))}")
-        print(f"→ 알림 대상(승인·미상장) {cnt}건")
+            if nm not in approved:
+                continue
+            keep = is_ipo_regstmt(f, approved, listed)
+            print(f"  [{'알림✓' if keep else '제외 '}] {f.get('corp_name')} "
+                  f"code={f.get('stock_code') or '없음'} cls={f.get('corp_cls')} | {rn} | {f.get('rcept_dt')}")
+        cnt = sum(1 for f in filings if is_ipo_regstmt(f, approved, listed))
+        print(f"→ 최종 알림 대상(IPO 지분증권·미상장) {cnt}건")
         return
 
     notifier = Notifier(dry_run=args.dry_run)
