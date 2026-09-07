@@ -13238,5 +13238,13 @@
     "apply_date": "2026-08-25",
     "result_date": "",
     "status": "청구서 접수"
+  },
+  "20260527000844": {
+    "name": "무신사",
+    "market": "유가증권",
+    "type": "신규상장",
+    "apply_date": "2026-09-07",
+    "result_date": "",
+    "status": "청구서 접수"
   }
 }
