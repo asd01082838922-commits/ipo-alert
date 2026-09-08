@@ -13246,5 +13246,13 @@
     "apply_date": "2026-09-07",
     "result_date": "",
     "status": "청구서 접수"
+  },
+  "20260609000245": {
+    "name": "씨앤엠",
+    "market": "코스닥",
+    "type": "신규상장",
+    "apply_date": "2026-09-08",
+    "result_date": "",
+    "status": "청구서 접수"
   }
 }
