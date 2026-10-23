@@ -13366,5 +13366,21 @@
     "apply_date": "2026-10-08",
     "result_date": "",
     "status": "청구서 접수"
+  },
+  "20260330000141": {
+    "name": "에버스핀",
+    "market": "코스닥",
+    "type": "신규상장",
+    "apply_date": "2026-10-23",
+    "result_date": "",
+    "status": "청구서 접수"
+  },
+  "20260727000195": {
+    "name": "티카로스",
+    "market": "코스닥",
+    "type": "신규상장",
+    "apply_date": "2026-10-23",
+    "result_date": "",
+    "status": "청구서 접수"
   }
 }
