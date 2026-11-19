@@ -396,8 +396,8 @@
     "market": "코스닥",
     "type": "신규상장",
     "apply_date": "2026-02-27",
-    "result_date": "",
-    "status": "청구서 접수"
+    "result_date": "2026-11-19",
+    "status": "심사 승인"
   },
   "20251125000262": {
     "name": "딜리셔스",
@@ -13468,6 +13468,14 @@
     "market": "유가증권",
     "type": "신규상장",
     "apply_date": "2026-11-13",
+    "result_date": "",
+    "status": "청구서 접수"
+  },
+  "20260729000756": {
+    "name": "브리즈바이오",
+    "market": "코스닥",
+    "type": "신규상장",
+    "apply_date": "2026-11-19",
     "result_date": "",
     "status": "청구서 접수"
   }
