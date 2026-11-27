@@ -13494,5 +13494,13 @@
     "apply_date": "2026-11-25",
     "result_date": "",
     "status": "청구서 접수"
+  },
+  "20260528000120": {
+    "name": "트위니",
+    "market": "코스닥",
+    "type": "신규상장",
+    "apply_date": "2026-11-27",
+    "result_date": "",
+    "status": "청구서 접수"
   }
 }
